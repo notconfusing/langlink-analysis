@@ -5,6 +5,8 @@ library(scales)
 library(nlstools)
 library(stringr)
 library(gridExtra)
+library(XML)
+library(plyr)
 setwd("~/workspace/venn-analysis")
 filter1 <- fromJSON(file='filter1.json')
 filter2 <- fromJSON(file='filter2.json')
@@ -17,10 +19,9 @@ filter2m <- melt(filter2)
 filter3m <- melt(filter3)
 allnm <- melt(alln)
 
-
 langtotm <-melt(langtot)
 langtotm <- langtotm[order(langtotm$value),]
-
+  
 
 a <- data.frame(matrix(ncol = 0, nrow = length(filter1m$value)))
 a["langs"] <- filter1m[c(order(filter1m$L1,filter1m$value)),"L1"]
@@ -57,9 +58,27 @@ q["tots"] <- a[c(order(a$tots,a$langs)),"tots"]
 #q["resid"] <- a[c(order(a$uniqs,a$langs)),"resid"]
 q["rat"] <- q[,"uniqs"] / q[,"tots"]
 
+
+theurl <- 'http://stats.wikimedia.org/EN/Sitemap.htm'
+tables <- readHTMLTable(theurl)
+usg <- tables$table2
+u <- data.frame(matrix(ncol=0, nrow=length(usg[,5]))
+u["langs"] <- usg[,5]
+u["usage"] <- as.numeric(gsub(",","", usg[,11]))
+                
+qum <- merge(q, u)
+
+qu <- data.frame(matrix(ncol=0,nrow=length(qum$usage)))
+qu["langs"] <- qum[order(qum$usage),"langs"]
+qu["usage"] <- qum[order(qum$usage),"usage"]
+qu["rat"] <- qum[order(qum$usage),"rat"]
+                
+                
+                
+
 q.1 <- subset(q, q[,"tots"]>=100000)
 q.2 <- subset(q, q[,"tots"]>=10000 & q[,"tots"]<100000)
-
+                
 totordplot1 <- ggplot(q.1, aes(x=langs, y=rat, fill=tots/max(tots)*100))+ 
   geom_bar(stat="identity", width = .9) + 
   #geom_bar(stat="identity", width = .5, alpha = .5, colour='red', aes(x=langs, y=resid), data=q.1)+
@@ -89,8 +108,43 @@ totordplot2
 
 grid.arrange(totordplot2, totordplot1,
              left="Percentage of Unique Items", main="Wikipedia Unique Article Percentage by Wikipedia Size (size as % of English)" )
-
-oq <- data.frame(matrix(ncol = 0, nrow = length(filter1m$value)))
+                
+                qu.1 <- subset(qu, qu[,"usage"]>=25000)
+                qu.2 <- subset(qu, qu[,"usage"]>=2000 & qu[,"usage"]<25000)
+                
+                usageplot1 <- ggplot(qu.1, aes(x=langs, y=rat, fill=usage/max(usage)*100))+ 
+                  geom_bar(stat="identity", width = .9) + 
+                  #geom_bar(stat="identity", width = .5, alpha = .5, colour='red', aes(x=langs, y=resid), data=q.1)+
+                  scale_x_discrete(limits=qu.1$langs) +
+                  scale_y_continuous(labels=percent)+
+                  scale_fill_gradient(low=muted("darkgreen"), high=muted("purple"), 
+                                      limits=c(0,20), "Views per hour as % of English")+
+                  geom_text(aes(x=langs,y=0,label=paste(round(100*rat,2), '%', sep='')),hjust=0, angle = 90, colour='grey', data=qu.1) +
+                  labs(title="More than 25,000 Views Per Hour")+
+                  theme_bw()+
+                  theme(axis.title.x=element_blank(), axis.title.y=element_blank())
+                usageplot1
+                
+                usageplot2 <- ggplot(qu.2, aes(x=langs, y=rat, fill=usage/max(qu.1$usage)*100))+ 
+                  geom_bar(stat="identity", width = .95) + 
+                  #geom_bar(stat="identity", width = .5, alpha = .5, colour='red', aes(x=langs, y=resid), data=q.1)+
+                  scale_x_discrete(limits=qu.2$langs) +
+                  scale_y_continuous(labels=percent)+
+                  scale_fill_gradient(low=muted("lightblue"), high=muted("lightgreen"), "Views per hour as % of English")+
+                  geom_text(aes(x=langs,y=0,
+                                label=paste(round(100*rat,1), '%', sep='')),
+                            hjust=0, angle = 90, colour='grey')+
+                  labs(title="2,000 to 25,000 Views Per Hour")+
+                  theme_bw()+
+                  theme(axis.title.x=element_blank(), axis.title.y=element_blank())
+                usageplot2
+                
+                grid.arrange(usageplot2, usageplot1,
+                             left="Percentage of Unique Items", main="Wikipedia Unique Article Percentage by Page View Usage (size as % of English's 10,872,446 Views Per Hour)" )
+                
+                
+                
+                oq <- data.frame(matrix(ncol = 0, nrow = length(filter1m$value)))
 oq["langs"] <- q[c(order(q$rat,q$langs)),"langs]"
 oq["rat"] <- q[c(order(q$rat,q$langs)),"rat"]
 oq["tots"] <- q[c(order(q$rat,q$langs)),"tots"]
